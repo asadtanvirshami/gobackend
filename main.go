@@ -25,6 +25,7 @@ func main() {
 	// Setup routes
 	routes.UserRoutes(router)
 
+	// *****Starting Server*****
 	fmt.Println("||==Starting Server==||")
 	port := "8080"
 	if p := os.Getenv("PORT"); p != "" {
