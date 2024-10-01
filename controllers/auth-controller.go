@@ -120,6 +120,7 @@ func Validate(c *gin.Context) {
 	user := c.MustGet("user").(models.User)
 	utils.Respond(c, http.StatusOK, gin.H{
 		"message": "User validated successfully",
+		"success":true
 		"user":    user,
 	})
 }
