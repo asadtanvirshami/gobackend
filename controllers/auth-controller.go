@@ -113,6 +113,7 @@ func Signin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success":true,
 		"message": "User logged in successfully",
+		"token":   tokenString,
 	})
 }
 
@@ -120,7 +121,7 @@ func Validate(c *gin.Context) {
 	user := c.MustGet("user").(models.User)
 	utils.Respond(c, http.StatusOK, gin.H{
 		"message": "User validated successfully",
-		"success":true
+		"success":true,
 		"user":    user,
 	})
 }

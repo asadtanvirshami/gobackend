@@ -7,6 +7,7 @@ import (
 	"your-app/initializers"
 	"your-app/routes"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-contrib/cors"
 	"log"
 )
 
@@ -21,6 +22,19 @@ func init() {
 func main() {
 	// Initialize Gin router
 	router := gin.Default()
+
+	// CORS configuration
+	corsConfig := cors.Config{
+		AllowOrigins:     []string{"*"}, // Adjust this to your front-end domain in production
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Authorization"},
+		AllowCredentials: true,
+	}
+
+	// Use CORS middleware
+	router.Use(cors.New(corsConfig))
+
 
 	// Setup routes
 	routes.UserRoutes(router)
