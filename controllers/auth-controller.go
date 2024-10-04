@@ -4,11 +4,14 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"context"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"your-app/initializers"
 	"your-app/models"
+	"google.golang.org/api/idtoken"
 	"your-app/utils"
 	"github.com/google/uuid"
 )
@@ -114,6 +117,95 @@ func Signin(c *gin.Context) {
 		"success":true,
 		"message": "User logged in successfully",
 		"token":   tokenString,
+	})
+}
+
+// GoogleLogin handles login using Google OAuth 2.0
+func GoogleLogin(c *gin.Context) {
+	// Request body structure
+	var body struct {
+		Token string `json:"token" binding:"required"` 
+	}
+
+	// Bind JSON body
+	if err := c.Bind(&body); err != nil {
+		utils.Respond(c, http.StatusBadRequest, gin.H{
+			"error": "Failed to read body",
+		})
+		return
+	}
+
+	// Validate the Google ID token
+	clientID := os.Getenv("GOOGLE_CLIENT_ID")
+	ctx := context.Background()
+
+	payload, err := idtoken.Validate(ctx, body.Token, clientID)
+	if err != nil {
+		utils.Respond(c, http.StatusUnauthorized, gin.H{
+			"error": "Invalid Google token",
+		})
+		return
+	}
+
+	// Extract user information from Google token
+	email := payload.Claims["email"].(string)
+	fname := payload.Claims["given_name"].(string)
+	lname := payload.Claims["family_name"].(string)
+
+	// Check if the user already exists in the database
+	var user models.User
+	initializers.DB.First(&user, "email = ?", email)
+
+	// If the user doesn't exist, create a new user
+	if user.ID == uuid.Nil {
+		user = models.User{
+			ID:       uuid.New(), 
+			Email:    email,
+			FirstName: fname, 
+			LastName: lname, 
+			Password: "",  
+		}
+
+		// Save the new user in the database
+		result := initializers.DB.Create(&user)
+		if result.Error != nil {
+			utils.Respond(c, http.StatusInternalServerError, gin.H{
+				"error": "Failed to create user",
+			})
+			return
+		}
+	}
+
+	// Generate a JWT token for the user
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": user.ID,
+		"id": user.ID,
+		"fname": user.FirstName,
+		"lname": user.LastName,
+		"blocked":user.Blocked,
+		"email":user.Email,
+		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(), 
+	})
+
+	// Sign the token
+	secretKey := os.Getenv("SECRET_KEY")
+	tokenString, err := token.SignedString([]byte(secretKey))
+	if err != nil {
+		utils.Respond(c, http.StatusInternalServerError, gin.H{
+			"error": "Failed to create token",
+		})
+		return
+	}
+
+	// Set cookie and return token in the response
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("Authorization", tokenString, 3600*24*30, "", "", false, true) // 30-day cookie
+
+	// Respond with success
+	utils.Respond(c, http.StatusOK, gin.H{
+		"message": "User logged in successfully",
+		"token":   tokenString,
+		"success":true,
 	})
 }
 

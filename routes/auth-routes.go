@@ -10,8 +10,9 @@ import (
 func UserRoutes(router *gin.Engine) {
 	userGroup := router.Group("/public/api/v1/user")
 	{
-		userGroup.POST("/signup", controllers.Signup)
-		userGroup.POST("/signin", controllers.Signin)
-		userGroup.GET("/validate",middleware.RequireAuth, controllers.Validate)
+		userGroup.POST("/auth/signup", controllers.Signup)
+		userGroup.POST("/auth/signin", controllers.Signin)
+		userGroup.POST("/auth/google-signin", controllers.GoogleLogin)
+		userGroup.GET("/auth/validate",middleware.RequireAuth, controllers.Validate)
 	}
 }
