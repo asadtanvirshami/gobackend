@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 	"context"
+	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gin-gonic/gin"
@@ -18,7 +19,11 @@ import (
 
 func Signup(c *gin.Context) {
 	// Get request body
+
+
 	var body struct {
+		FirstName    string `json:"firstName" binding:"required"`
+		LastName    string `json:"lastName" binding:"required"`
 		Email    string `json:"email" binding:"required"`
 		Password string `json:"password" binding:"required"`
 	}
@@ -27,6 +32,8 @@ func Signup(c *gin.Context) {
 		utils.Respond(c, http.StatusBadRequest, gin.H{
 			"error": "Failed to read body",
 		})
+		fmt.Println(err)
+
 		return
 	}
 
@@ -41,6 +48,8 @@ func Signup(c *gin.Context) {
 
 	// Create the user
 	user := models.User{
+		FirstName: body.FirstName,
+		LastName:  body.LastName,
 		Email:    body.Email,
 		Password: string(hash),
 	}
@@ -55,6 +64,7 @@ func Signup(c *gin.Context) {
 
 	// Respond with success
 	utils.Respond(c, http.StatusOK, gin.H{
+		"success":true,
 		"message": "User created successfully",
 	})
 }
