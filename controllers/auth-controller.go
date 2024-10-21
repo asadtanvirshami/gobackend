@@ -169,7 +169,7 @@ func GoogleLogin(c *gin.Context) {
 	// If the user doesn't exist, create a new user
 	if user.ID == uuid.Nil {
 		user = models.User{
-			ID:       uuid.New(), 
+			ID: uuid.New(), 
 			Email:    email,
 			FirstName: fname, 
 			LastName: lname, 
