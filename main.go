@@ -38,6 +38,7 @@ func main() {
 
 	// Setup routes
 	routes.UserRoutes(router)
+	routes.CategoryRoutes(router)
 
 	// *****Starting Server*****
 	fmt.Println("||==Starting Server==||")
