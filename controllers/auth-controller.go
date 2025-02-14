@@ -1,72 +1,99 @@
 package controllers
 
 import (
-	"net/http"
-	"os"
-	"time"
 	"context"
 	"fmt"
-
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
+	"math/rand"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 	"your-app/initializers"
 	"your-app/models"
-	"google.golang.org/api/idtoken"
+	"your-app/services"
 	"your-app/utils"
+
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/api/idtoken"
 )
 
+func generateOTP() string {
+	src := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(src)
+	return fmt.Sprintf("%06d", r.Intn(1000000)) // 6-digit OTP
+}
+
 func Signup(c *gin.Context) {
-	// Get request body
-
-
-	var body struct {
-		FirstName    string `json:"firstName" binding:"required"`
-		LastName    string `json:"lastName" binding:"required"`
-		Email    string `json:"email" binding:"required"`
-		Password string `json:"password" binding:"required"`
-	}
-
-	if err := c.Bind(&body); err != nil {
-		utils.Respond(c, http.StatusBadRequest, gin.H{
-			"error": "Failed to read body",
-		})
-		fmt.Println(err)
-
+	if err := c.Request.ParseMultipartForm(10 << 20); err != nil {
+		utils.Respond(c, http.StatusBadRequest, gin.H{"error": "Failed to parse form"})
 		return
 	}
 
-	// Hash the password
-	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
+	// Get form values
+	firstName := c.PostForm("firstName")
+	lastName := c.PostForm("lastName")
+	email := c.PostForm("email")
+	password := c.PostForm("password")
+
+	// Get file from request
+	file, header, err := c.Request.FormFile("image")
 	if err != nil {
-		utils.Respond(c, http.StatusBadRequest, gin.H{
-			"error": "Failed to hash password",
-		})
+		utils.Respond(c, http.StatusBadRequest, gin.H{"error": "Failed to get image"})
+		return
+	}
+	defer file.Close()
+
+	// Save image to local server
+	imagePath := filepath.Join("uploads", header.Filename)
+	out, err := os.Create(imagePath)
+	if err != nil {
+		utils.Respond(c, http.StatusInternalServerError, gin.H{"error": "Failed to save image"})
+		return
+	}
+	defer out.Close()
+
+	// Upload to ImageKit
+	imageURL, err := services.UploadToImageKit(imagePath)
+	if err != nil {
+		utils.Respond(c, http.StatusInternalServerError, gin.H{"error": "Failed to upload image"})
+		return
+	}
+	os.Remove(imagePath)
+
+	// Hash Password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 10)
+	if err != nil {
+		utils.Respond(c, http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
 	}
 
-	// Create the user
+	// Generate OTP
+	otp := generateOTP()
+
+	// Create User
 	user := models.User{
-		FirstName: body.FirstName,
-		LastName:  body.LastName,
-		Email:    body.Email,
-		Password: string(hash),
+		FirstName: firstName,
+		LastName:  lastName,
+		Email:     email,
+		Password:  string(hashedPassword),
+		Image:     imageURL,
+		OTP:       otp,
 	}
 
 	result := initializers.DB.Create(&user)
 	if result.Error != nil {
-		utils.Respond(c, http.StatusBadRequest, gin.H{
-			"error": "Failed to create user",
-		})
+		utils.Respond(c, http.StatusBadRequest, gin.H{"error": "Failed to create user"})
 		return
 	}
 
-	// Respond with success
-	utils.Respond(c, http.StatusOK, gin.H{
-		"success":true,
-		"message": "User created successfully",
-	})
+	// Send OTP Email
+	go services.SendOTPEmail(email, otp)
+
+	// Success Response
+	utils.Respond(c, http.StatusOK, gin.H{"success": true, "message": "User created successfully"})
 }
 
 func Signin(c *gin.Context) {
@@ -94,7 +121,7 @@ func Signin(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	// Compare and send in pass with saved hash pass
 	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password))
 	if err != nil {
@@ -121,10 +148,10 @@ func Signin(c *gin.Context) {
 
 	// Respond with success
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("Authorization",tokenString, 3600 * 24 * 30, "", "", false, true)	
+	c.SetCookie("Authorization", tokenString, 3600*24*30, "", "", false, true)
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":true,
+		"success": true,
 		"message": "User logged in successfully",
 		"token":   tokenString,
 	})
@@ -134,7 +161,7 @@ func Signin(c *gin.Context) {
 func GoogleLogin(c *gin.Context) {
 	// Request body structure
 	var body struct {
-		Token string `json:"token" binding:"required"` 
+		Token string `json:"token" binding:"required"`
 	}
 
 	// Bind JSON body
@@ -169,11 +196,11 @@ func GoogleLogin(c *gin.Context) {
 	// If the user doesn't exist, create a new user
 	if user.ID == uuid.Nil {
 		user = models.User{
-			ID: uuid.New(), 
-			Email:    email,
-			FirstName: fname, 
-			LastName: lname, 
-			Password: "",  
+			ID:        uuid.New(),
+			Email:     email,
+			FirstName: fname,
+			LastName:  lname,
+			Password:  "",
 		}
 
 		// Save the new user in the database
@@ -188,13 +215,13 @@ func GoogleLogin(c *gin.Context) {
 
 	// Generate a JWT token for the user
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": user.ID,
-		"id": user.ID,
-		"fname": user.FirstName,
-		"lname": user.LastName,
-		"blocked":user.Blocked,
-		"email":user.Email,
-		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(), 
+		"sub":     user.ID,
+		"id":      user.ID,
+		"fname":   user.FirstName,
+		"lname":   user.LastName,
+		"blocked": user.Blocked,
+		"email":   user.Email,
+		"exp":     time.Now().Add(time.Hour * 24 * 30).Unix(),
 	})
 
 	// Sign the token
@@ -215,7 +242,7 @@ func GoogleLogin(c *gin.Context) {
 	utils.Respond(c, http.StatusOK, gin.H{
 		"message": "User logged in successfully",
 		"token":   tokenString,
-		"success":true,
+		"success": true,
 	})
 }
 
@@ -223,7 +250,7 @@ func Validate(c *gin.Context) {
 	user := c.MustGet("user").(models.User)
 	utils.Respond(c, http.StatusOK, gin.H{
 		"message": "User validated successfully",
-		"success":true,
+		"success": true,
 		"user":    user,
 	})
 }
