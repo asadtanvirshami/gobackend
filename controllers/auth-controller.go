@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -32,7 +34,6 @@ func Signup(c *gin.Context) {
 		return
 	}
 
-	// Get form values
 	firstName := c.PostForm("firstName")
 	lastName := c.PostForm("lastName")
 	email := c.PostForm("email")
@@ -46,22 +47,57 @@ func Signup(c *gin.Context) {
 	}
 	defer file.Close()
 
-	// Save image to local server
-	imagePath := filepath.Join("uploads", header.Filename)
-	out, err := os.Create(imagePath)
-	if err != nil {
-		utils.Respond(c, http.StatusInternalServerError, gin.H{"error": "Failed to save image"})
+	uploadDir := "uploads"
+	// Ensure the "uploads" directory exists
+	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
 		return
 	}
-	defer out.Close()
 
-	// Upload to ImageKit
-	imageURL, err := services.UploadToImageKit(imagePath)
+	timestamp := time.Now().UnixMilli()
+	fileName := fmt.Sprintf("%d-%s", timestamp, header.Filename)
+	imagePath := filepath.Join(uploadDir, fileName)
+
+	out, err := os.Create(imagePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image"})
+		return
+	}
+
+	_, err = io.Copy(out, file)
+	if err != nil {
+		out.Close() // Ensure we close the file before responding
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to write image file"})
+		return
+	}
+
+	out.Sync()  // Flush any remaining writes
+	out.Close() // Close immediately to release file lock
+
+	// Open the file for reading (for ImageKit upload)
+	fileData, err := os.Open(imagePath)
+	if err != nil {
+		fmt.Println("Error opening file for reading:", err)
+		return
+	}
+
+	// Read into buffer
+	var buffer bytes.Buffer
+	_, err = io.Copy(&buffer, fileData)
+	if err != nil {
+		fileData.Close()
+		fmt.Println("Error copying file to buffer:", err)
+		return
+	}
+
+	fileData.Close() // Close file after reading to release OS lock
+
+	// Upload image
+	url, fileId, err := services.UploadImage(imagePath, fileName, "documents")
 	if err != nil {
 		utils.Respond(c, http.StatusInternalServerError, gin.H{"error": "Failed to upload image"})
 		return
 	}
-	os.Remove(imagePath)
 
 	// Hash Password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 10)
@@ -79,7 +115,8 @@ func Signup(c *gin.Context) {
 		LastName:  lastName,
 		Email:     email,
 		Password:  string(hashedPassword),
-		Image:     imageURL,
+		Image:     url,
+		ImageId:   fileId,
 		OTP:       otp,
 	}
 
@@ -94,6 +131,16 @@ func Signup(c *gin.Context) {
 
 	// Success Response
 	utils.Respond(c, http.StatusOK, gin.H{"success": true, "message": "User created successfully"})
+
+	// Wait for OS buffer clearance (last resort)
+	time.Sleep(100 * time.Millisecond)
+
+	// Now we can safely delete the file
+	if err := os.Remove(imagePath); err != nil {
+		fmt.Println("Error removing file:", err)
+	} else {
+		fmt.Println("File successfully removed:", imagePath)
+	}
 }
 
 func Signin(c *gin.Context) {
@@ -110,6 +157,7 @@ func Signin(c *gin.Context) {
 		return
 	}
 
+	fmt.Println(body.Email, body.Password)
 	// Find the user by email
 	var user models.User
 	initializers.DB.First(&user, "email = ?", body.Email)

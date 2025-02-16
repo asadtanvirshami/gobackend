@@ -12,6 +12,7 @@ type User struct {
 	LastName    string
 	Bio         string
 	Image       string
+	ImageId     string
 	OTP         string
 	Pronouns    string
 	MyersBriggs string
