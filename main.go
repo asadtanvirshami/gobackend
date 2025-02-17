@@ -1,24 +1,25 @@
-package main 
+package main
 
 //imports
 import (
 	"fmt"
+	"log"
 	"os"
 	"your-app/initializers"
 	"your-app/routes"
-	"github.com/gin-gonic/gin"
+
 	"github.com/gin-contrib/cors"
-	"log"
+	"github.com/gin-gonic/gin"
 )
 
-//init func for env initialzation
+// init func for env initialzation
 func init() {
 	initializers.LoadEnv()
 	initializers.DBConnection()
 	initializers.SyncDB()
 }
 
-//main func for server connection
+// main func for server connection
 func main() {
 	// Initialize Gin router
 	router := gin.Default()
@@ -35,10 +36,10 @@ func main() {
 	// Use CORS middleware
 	router.Use(cors.New(corsConfig))
 
-
 	// Setup routes
 	routes.UserRoutes(router)
 	routes.CategoryRoutes(router)
+	routes.CommunityRoutes(router)
 
 	// *****Starting Server*****
 	fmt.Println("||==Starting Server==||")

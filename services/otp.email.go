@@ -1,19 +1,27 @@
 package services
 
 import (
-	"fmt"
-	"net/smtp"
-	"os"
+	gomail "gopkg.in/gomail.v2"
 )
 
 // Send OTP Email
 func SendOTPEmail(email, otp string) {
-	auth := smtp.PlainAuth("", os.Getenv("SMTP_USER"), os.Getenv("SMTP_PASSWORD"), os.Getenv("SMTP_HOST"))
-	to := []string{email}
-	msg := []byte("Subject: Email Verification\n\nYour OTP is: " + otp)
+	from := "asadtanvir20@gmail.com"
+	to := email
+	host := "smtp-relay.brevo.com"
+	port := 587
 
-	err := smtp.SendMail(os.Getenv("SMTP_HOST")+":"+os.Getenv("SMTP_PORT"), auth, os.Getenv("SMTP_USER"), to, msg)
-	if err != nil {
-		fmt.Println("Failed to send email:", err)
+	msg := gomail.NewMessage()
+	msg.SetHeader("From", from)
+	msg.SetHeader("To", to)
+	msg.SetHeader("Subject", " Email Verification OTP")
+	// text/html for a html email
+	msg.SetBody("text/html", "<div><p>Do not share this passcode with anyone else. <br/></p><strong>"+otp+"</strong></div>")
+
+	n := gomail.NewDialer(host, port, from, "ZGRIB7TKYg083z9h")
+
+	// Send the email
+	if err := n.DialAndSend(msg); err != nil {
+		panic(err)
 	}
 }

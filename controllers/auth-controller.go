@@ -108,16 +108,18 @@ func Signup(c *gin.Context) {
 
 	// Generate OTP
 	otp := generateOTP()
+	expiresAt := time.Now().Add(1 * time.Minute).Unix()
 
 	// Create User
 	user := models.User{
-		FirstName: firstName,
-		LastName:  lastName,
-		Email:     email,
-		Password:  string(hashedPassword),
-		Image:     url,
-		ImageId:   fileId,
-		OTP:       otp,
+		FirstName:    firstName,
+		LastName:     lastName,
+		Email:        email,
+		Password:     string(hashedPassword),
+		Image:        &url,
+		ImageID:      &fileId,
+		OTP:          &otp,
+		OTPExpiresAt: &expiresAt,
 	}
 
 	result := initializers.DB.Create(&user)
@@ -157,8 +159,6 @@ func Signin(c *gin.Context) {
 		return
 	}
 
-	fmt.Println(body.Email, body.Password)
-	// Find the user by email
 	var user models.User
 	initializers.DB.First(&user, "email = ?", body.Email)
 
@@ -202,6 +202,166 @@ func Signin(c *gin.Context) {
 		"success": true,
 		"message": "User logged in successfully",
 		"token":   tokenString,
+	})
+}
+
+func OTPVerification(c *gin.Context) {
+	var body struct {
+		OTP string `json:"otp" binding:"required"`
+	}
+
+	// Bind the JSON request body
+	if err := c.ShouldBindJSON(&body); err != nil {
+		utils.Respond(c, http.StatusBadRequest, gin.H{
+			"error": "Invalid request body",
+		})
+		return
+	}
+
+	// Retrieve the user with the given OTP from the database
+	var user models.User
+	if result := initializers.DB.Where("otp = ?", body.OTP).First(&user); result.Error != nil {
+		utils.Respond(c, http.StatusBadRequest, gin.H{
+			"error": "Invalid OTP or user not found",
+		})
+		return
+	}
+
+	// Check if OTP is expired
+	currentTime := time.Now().Unix()
+	if user.OTPExpiresAt != nil && *user.OTPExpiresAt < currentTime {
+		utils.Respond(c, http.StatusBadRequest, gin.H{
+			"error": "OTP has expired",
+		})
+		return
+	}
+
+	// Verify OTP
+	if user.OTP != nil && *user.OTP == body.OTP {
+		utils.Respond(c, http.StatusOK, gin.H{
+			"success": true,
+			"message": "OTP verified successfully",
+		})
+	} else {
+		utils.Respond(c, http.StatusBadRequest, gin.H{
+			"error": "Invalid OTP",
+		})
+	}
+}
+
+func ResendOTP(c *gin.Context) {
+	var body struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+
+	// Bind the JSON request body
+	if err := c.ShouldBindJSON(&body); err != nil {
+		utils.Respond(c, http.StatusBadRequest, gin.H{
+			"error": "Invalid request body",
+		})
+		return
+	}
+
+	// Retrieve the user by email
+	var user models.User
+	if result := initializers.DB.Where("email = ?", body.Email).First(&user); result.Error != nil {
+		utils.Respond(c, http.StatusBadRequest, gin.H{
+			"error": "User not found",
+		})
+		return
+	}
+
+	// Generate a new OTP and set expiration time (1 minute from now)
+	newOTP := generateOTP()                                // Implement the OTP generation logic here
+	otpExpiresAt := time.Now().Add(1 * time.Minute).Unix() // Expiry time set to 1 minute from now
+
+	// Update the user's OTP and expiration time
+	user.OTP = &newOTP
+	user.OTPExpiresAt = &otpExpiresAt
+	if err := initializers.DB.Save(&user).Error; err != nil {
+		utils.Respond(c, http.StatusInternalServerError, gin.H{
+			"error": "Failed to update OTP",
+		})
+		return
+	}
+
+	// Send the OTP to the user's email
+	go services.SendOTPEmail(body.Email, newOTP)
+
+	utils.Respond(c, http.StatusOK, gin.H{
+		"success": true,
+		"message": "OTP sent successfully",
+	})
+}
+
+func AccountRecovery(c *gin.Context) {
+	var body struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+
+	// Bind the JSON request body
+	if err := c.ShouldBindJSON(&body); err != nil {
+		utils.Respond(c, http.StatusBadRequest, gin.H{
+			"error": "Invalid request body",
+		})
+		return
+	}
+
+	// Find the user by email
+	var user models.User
+	if result := initializers.DB.Where("email = ?", body.Email).First(&user); result.Error != nil {
+		utils.Respond(c, http.StatusBadRequest, gin.H{
+			"error": "User not found",
+		})
+		return
+	}
+
+	// Generate a new OTP and set expiration time (1 minute from now)
+	newOTP := generateOTP()
+	otpExpiresAt := time.Now().Add(1 * time.Minute).Unix()
+	// Update the user's OTP and expiration time
+	user.OTP = &newOTP
+	user.OTPExpiresAt = &otpExpiresAt
+	if err := initializers.DB.Save(&user).Error; err != nil {
+		utils.Respond(c, http.StatusInternalServerError, gin.H{
+			"error": "Failed to update OTP",
+		})
+		return
+	}
+
+	go services.SendOTPEmail(body.Email, newOTP)
+
+	utils.Respond(c, http.StatusOK, gin.H{
+		"success": true,
+		"message": "OTP sent successfully",
+	})
+}
+
+func ResetPassword(c *gin.Context) {
+	var body struct {
+		Email    string `json:"email" binding:"required"`
+		Password string `json:"password" binding:"required"`
+	}
+
+	var user models.User
+	if err := initializers.DB.Save(&user).Error; err != nil {
+		utils.Respond(c, http.StatusInternalServerError, gin.H{
+			"error": "Failed to update OTP",
+		})
+		return
+	}
+
+	user.Password = body.Password
+	if err := initializers.DB.Save(&user).Error; err != nil {
+		utils.Respond(c, http.StatusInternalServerError, gin.H{
+			"error": "Failed to update password",
+		})
+		return
+	}
+
+	utils.Respond(c, http.StatusOK, gin.H{
+		"success": true,
+		"message": "Password reset successfully",
 	})
 }
 
