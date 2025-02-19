@@ -6,22 +6,30 @@ import (
 	"your-app/models"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 func GetCommunities(c *gin.Context) {
 	var communities []models.Community
-	initializers.DB.Find(&communities)
+
+	// Use Preload to fetch related User and Category data
+	result := initializers.DB.
+		Preload("User").      // Load user details
+		Preload("Category").  // Load category details
+		Find(&communities)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, communities)
 }
-
 func CreateCommunity(c *gin.Context) {
 	var community models.Community
 	if err := c.ShouldBindJSON(&community); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	community.ID = uuid.New()
 	initializers.DB.Create(&community)
 	c.JSON(http.StatusCreated, community)
 }

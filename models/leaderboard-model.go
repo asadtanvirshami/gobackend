@@ -14,6 +14,6 @@ type CommunityLeaderboard struct {
 	Points      int       `gorm:"not null" json:"points"`
 	Rank        int       `gorm:"not null" json:"rank"`
 
-	User      User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;" json:"user"`
-	Community Community `gorm:"foreignKey:CommunityID;constraint:OnDelete:CASCADE;" json:"community"`
+	User      User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;" json:"users"`
+	Community Community `gorm:"foreignKey:CommunityID;constraint:OnDelete:CASCADE;" json:"communities"`
 }

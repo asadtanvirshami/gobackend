@@ -36,7 +36,8 @@ type User struct {
 	Facebook  *string `gorm:"type:varchar(255)" json:"facebook,omitempty"`
 	Other     *string `gorm:"type:varchar(255)" json:"other,omitempty"`
 
-	CreatedAt int64          `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt int64          `gorm:"autoUpdateTime" json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	CreatedAt   int64          `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt   int64          `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	Communities []Community    `gorm:"foreignKey:UserID" json:"communities"`
 }

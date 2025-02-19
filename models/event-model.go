@@ -16,5 +16,5 @@ type CommunityEvent struct {
 	EventDate   time.Time `gorm:"not null" json:"event_date"`
 	Cover       string    `json:"cover"`
 
-	Community Community `gorm:"foreignKey:CommunityID;constraint:OnDelete:CASCADE;" json:"community"`
+	Community Community `gorm:"foreignKey:CommunityID;constraint:OnDelete:CASCADE;" json:"communities"` // Belongs to Community
 }

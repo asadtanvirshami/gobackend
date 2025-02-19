@@ -1,4 +1,4 @@
-package models  
+package models
 
 import (
 	"github.com/google/uuid"
@@ -7,6 +7,7 @@ import (
 
 type Category struct {
 	gorm.Model
-	ID uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey" json:"id"`
-	Name string
+	ID         uuid.UUID   `gorm:"type:uuid;default:uuid_generate_v4();primaryKey" json:"id"`
+	Name       string      `json:"name"`
+	Communities []Community `gorm:"foreignKey:CategoryID" json:"communities"`
 }

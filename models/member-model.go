@@ -11,6 +11,6 @@ type CommunityUser struct {
 	CommunityID uuid.UUID `gorm:"type:uuid;primaryKey" json:"community_id"`
 	Role        string    `gorm:"type:varchar(50);not null" json:"role"` // e.g., "admin", "moderator", "member"
 
-	User      User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;" json:"user"`
-	Community Community `gorm:"foreignKey:CommunityID;constraint:OnDelete:CASCADE;" json:"community"`
+	User      User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;" json:"users"`
+	Community Community `gorm:"foreignKey:CommunityID;constraint:OnDelete:CASCADE;" json:"communities"`
 }
