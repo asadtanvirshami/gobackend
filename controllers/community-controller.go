@@ -13,8 +13,8 @@ func GetCommunities(c *gin.Context) {
 
 	// Use Preload to fetch related User and Category data
 	result := initializers.DB.
-		Preload("User").      // Load user details
-		Preload("Category").  // Load category details
+		Preload("User").     // Load user details
+		Preload("Category"). // Load category details
 		Find(&communities)
 
 	if result.Error != nil {
@@ -22,7 +22,11 @@ func GetCommunities(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, communities)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Communities fetched successfully",
+		"data":    communities,
+	})
 }
 func CreateCommunity(c *gin.Context) {
 	var community models.Community
